@@ -39,31 +39,9 @@ LOGING_CONFIG = {
     },
 }
 
-# логирование
 logging.config.dictConfig(LOGING_CONFIG)
 logger = logging.getLogger(__name__)
 logger.debug('Логгер сконфигурирован.')
-
-
-def parse_homework_status(homework):
-    homework_name = homework['homework_name']
-    if homework['status'] == 'rejected':
-        verdict = 'К сожалению, в работе нашлись ошибки.'
-    elif homework['status'] == 'reviewing':
-        verdict = 'Работа взята в ревью.'
-    else:
-        verdict = 'Ревьюеру всё понравилось, работа зачтена!'
-    return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
-
-
-def get_homeworks(current_timestamp):
-    homework_statuses = requests.get(
-        'https://praktikum.yandex.ru/api/user_api/homework_statuses/',
-        headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
-        params={'from_date': current_timestamp},
-    )
-    return homework_statuses.json()
-
 
 def send_message(message):
     try:
@@ -73,8 +51,40 @@ def send_message(message):
     else:
         logger.info(f'Сообщение отправлено. Текст сообщения:  {message}.')
 
+def parse_homework_status(homework):
+    try:
+        homework_name = homework['homework_name']
+    except KeyError as error:
+        message = f'Ошибка распаковки ответа сервера {error}.'
+        logger.error(message)
+        send_message(message)
+    else:
+        if homework['status'] == 'rejected':
+            verdict = 'К сожалению, в работе нашлись ошибки.'
+        elif homework['status'] == 'reviewing':
+            verdict = 'Работа взята в ревью.'
+        else:
+            verdict = 'Ревьюеру всё понравилось, работа зачтена!'
+        return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
+
+
+def get_homeworks(current_timestamp):
+    try:
+        homework_statuses = requests.get(
+            'https://praktikum.yandex.ru/api/user_api/homework_statuses/',
+            headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
+            params={'from_date': current_timestamp},
+        )
+    except requests.RequestException as error:
+        message = f'Ошибка соединения с сервером практикума. {error}'
+        logger.error(message)
+        send_message(message)
+    else:
+        return homework_statuses.json()
+
 
 def main():
+    logger.debug('Программа запущена')
     current_timestamp = int(time.time())
 
     while True:
@@ -99,5 +109,4 @@ if __name__ == '__main__':
         logger.critical(f'ERROR: Бот не запущен {error}')
     else:
         logger.debug('Бот запущен')
-        logger.debug('Программа запущена')
         main()
