@@ -43,6 +43,7 @@ logging.config.dictConfig(LOGING_CONFIG)
 logger = logging.getLogger(__name__)
 logger.debug('Логгер сконфигурирован.')
 
+
 def send_message(message):
     try:
         bot.send_message(CHAT_ID, message)
@@ -50,6 +51,7 @@ def send_message(message):
         logger.error(f'Ошибка отправки сообщения. Текст ошибки: {error}.')
     else:
         logger.info(f'Сообщение отправлено. Текст сообщения:  {message}.')
+
 
 def parse_homework_status(homework):
     try:
