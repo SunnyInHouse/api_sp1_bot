@@ -85,11 +85,16 @@ def get_homeworks(current_timestamp):
             headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
             params={'from_date': current_timestamp},
         )
+        homework_statuses_json = homework_statuses.json()
     except requests.RequestException:
         raise TGBotException(message)
+    except TypeError:
+        raise TGBotException(f'{message} Получен файл в неверном формате.')
+    except ValueError:
+        raise TGBotException(f'{message} Получен некорректный файл json.')
     if homework_statuses.status_code != HTTPStatus.OK:
         raise TGBotException(message)
-    return homework_statuses.json()
+    return homework_statuses_json
 
 
 def main():
