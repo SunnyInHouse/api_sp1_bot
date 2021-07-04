@@ -54,27 +54,27 @@ def send_message(message):
     try:
         bot.send_message(CHAT_ID, message)
     except telegram.error.TelegramError as error:
-        logger.critical(f'Ошибка отправки сообщения. Ошибка telegram: {error}')
-    except Exception as error:
-        raise TGBotException(f'Ошибка {error}')
-    else:
-        logger.info(f'Сообщение отправлено. Текст сообщения:  {message}')
+        raise TGBotException('Ошибка отправки сообщения. '
+                             f'Ошибка telegram: {error}')
+    logger.info(f'Сообщение отправлено. Текст сообщения:  {message}')
 
 
 def parse_homework_status(homework):
     try:
         homework_name = homework['homework_name']
+        homework_status = homework['status']
     except KeyError:
         raise TGBotException('При распаковке полученной домашней работы '
                              'произошла ошибка.')
+    if homework_status == 'rejected':
+        verdict = 'К сожалению, в работе нашлись ошибки.'
+    elif homework_status == 'reviewing':
+        verdict = 'Работа взята в ревью.'
+    elif homework_status == 'approved':
+        verdict = 'Ревьюеру всё понравилось, работа зачтена!'
     else:
-        if homework['status'] == 'rejected':
-            verdict = 'К сожалению, в работе нашлись ошибки.'
-        elif homework['status'] == 'reviewing':
-            verdict = 'Работа взята в ревью.'
-        else:
-            verdict = 'Ревьюеру всё понравилось, работа зачтена!'
-        return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
+        raise TGBotException('Получен неизвестный статус проверки работы.')
+    return f'У вас проверили работу "{homework_name}"!\n{verdict}'
 
 
 def get_homeworks(current_timestamp):
@@ -85,11 +85,11 @@ def get_homeworks(current_timestamp):
             headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
             params={'from_date': current_timestamp},
         )
-        if homework_statuses.status_code != HTTPStatus.OK:
-            raise TGBotException(f'{message} Неверный запрос.')
-        return homework_statuses.json()
     except requests.RequestException:
         raise TGBotException(message)
+    if homework_statuses.status_code != HTTPStatus.OK:
+        raise TGBotException(message)
+    return homework_statuses.json()
 
 
 def main():
