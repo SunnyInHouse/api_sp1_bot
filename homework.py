@@ -2,9 +2,11 @@ import logging
 import logging.config
 import os
 import time
+from http import HTTPStatus
 
 import requests
 import telegram
+import telegram.error
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -44,22 +46,27 @@ logger = logging.getLogger(__name__)
 logger.debug('Логгер сконфигурирован.')
 
 
+class TGBotException(Exception):
+    pass
+
+
 def send_message(message):
     try:
         bot.send_message(CHAT_ID, message)
+    except telegram.error.TelegramError as error:
+        logger.critical(f'Ошибка отправки сообщения. Ошибка telegram: {error}')
     except Exception as error:
-        logger.error(f'Ошибка отправки сообщения. Текст ошибки: {error}.')
+        raise TGBotException(f'Ошибка {error}')
     else:
-        logger.info(f'Сообщение отправлено. Текст сообщения:  {message}.')
+        logger.info(f'Сообщение отправлено. Текст сообщения:  {message}')
 
 
 def parse_homework_status(homework):
     try:
         homework_name = homework['homework_name']
-    except KeyError as error:
-        message = f'Ошибка распаковки ответа сервера {error}.'
-        logger.error(message)
-        send_message(message)
+    except KeyError:
+        raise TGBotException('При распаковке полученной домашней работы '
+                             'произошла ошибка.')
     else:
         if homework['status'] == 'rejected':
             verdict = 'К сожалению, в работе нашлись ошибки.'
@@ -71,18 +78,18 @@ def parse_homework_status(homework):
 
 
 def get_homeworks(current_timestamp):
+    message = 'При получении домашней работы произошла ошибка.'
     try:
         homework_statuses = requests.get(
             'https://praktikum.yandex.ru/api/user_api/homework_statuses/',
             headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
             params={'from_date': current_timestamp},
         )
-    except requests.RequestException as error:
-        message = f'Ошибка соединения с сервером практикума. {error}'
-        logger.error(message)
-        send_message(message)
-    else:
+        if homework_statuses.status_code != HTTPStatus.OK:
+            raise TGBotException(f'{message} Неверный запрос.')
         return homework_statuses.json()
+    except requests.RequestException:
+        raise TGBotException(message)
 
 
 def main():
@@ -96,10 +103,16 @@ def main():
                 hw_status = parse_homework_status(
                     last_homework['homeworks'][0])
                 send_message(hw_status)
+            current_timestamp = last_homework['current_date']
+            time.sleep(5 * 60)
+        except TGBotException as error:
+            message = f'Бот упал с ошибкой: {error}'
+            logger.error(message)
+            send_message(message)
             time.sleep(5 * 60)
         except Exception as error:
-            message = f'Бот упал с ошибкой: {error}'
-            logger.error(f'ERROR: {message}')
+            message = f'Неизвестная ошибка: {error}'
+            logger.exception(message)
             send_message(message)
             time.sleep(5)
 
@@ -107,8 +120,10 @@ def main():
 if __name__ == '__main__':
     try:
         bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    except telegram.error.InvalidToken:
+        logger.critical('Бот не запущен. Неверный токен бота.')
     except Exception as error:
-        logger.critical(f'ERROR: Бот не запущен {error}')
+        logger.critical(f'Бот не запущен {error}', exc_info=True)
     else:
-        logger.debug('Бот запущен')
+        logger.debug('Бот сконфигурирован.')
         main()
